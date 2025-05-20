@@ -206,6 +206,30 @@ rules:
 defaults:
 DATA_TRUNCATION: "WARN"
 MISSING_PRIMARY_KEY: "REQUIRE_DECISION"
+
+
+dsn:
+  origin:
+    driver: "DM8 ODBC DRIVER"
+    server: "172.16.117.71:15236"
+    database: "JWAB"
+    schema: "JWAB"
+    username: "JWAB"
+    password: "jhy123456"
+  reference:
+    driver: "DM8 ODBC DRIVER"
+    server: "172.16.117.71:15236"
+    database: "JWAB01"
+    schema: "JWAB01"
+    username: "JWAB01"
+    password: "jhy123456"
+  target:
+    driver: "DM8 ODBC DRIVER"
+    server: "172.16.117.71:15236"
+    database: "JWAB02"
+    schema: "JWAB02"
+    username: "JWAB02"
+    password: "jhy123456"
 ```
 
 **6. 实现建议**
