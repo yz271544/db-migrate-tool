@@ -1,0 +1,37 @@
+dsn:
+  origin:
+    driver: "DM8ODBCDRIVER"
+    server: "172.16.117.71:15236"
+    database: "JWAB"
+    schema: "JWAB"
+    username: "JWAB"
+    password: "jhy123456"
+  reference:
+    driver: "DM8ODBCDRIVER"
+    server: "172.16.117.71:15236"
+    database: "JWAB01"
+    schema: "JWAB01"
+    username: "JWAB01"
+    password: "jhy123456"
+  target:
+    driver: "DM8ODBCDRIVER"
+    server: "172.16.117.71:15236"
+    database: "JWAB02"
+    schema: "JWAB02"
+    username: "JWAB02"
+    password: "jhy123456"
+
+connection_pool:
+  min_size: 1
+  max_size: 10
+  timeout_seconds: 30
+
+batch:
+  batch_size: 1000
+  commit_frequency: 100
+
+parallel:
+  enabled: true
+  thread_count: 4
+
+log_level: "info"

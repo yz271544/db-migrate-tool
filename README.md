@@ -1,213 +1,37 @@
-# Rust db-migrate-tool
+# Database Migration Tool
 
-## 简介
+A powerful command-line tool for database migration and data merging operations, written in Rust.
 
-想要用rust编写一个数据库割接的命令行工具，为了兼容性，可能需要采用odbc连接方式。
+## Features
 
-我想到的规则:
-1. 需要在配置文件(yaml)中指定原连接信息，参照连接信息，目标库连接信息；
-2. 需要采集原库和参照库的元数据信息，包括表名称，字段名称，字段类型，长度等；
-3. 需要指定完全参照码表映射，即原库中表数据完全忽略；
-4. 需要指定原库中将要无效的表名称。
-5. 能够生成到目标库的建表语句，能够导出映射的数据写入语句。给出判定日志和告警信息，能够方便运维人员二次判定和裁决；
-6. 能够支持执行建表语句和导入数据过程到目标库。
+- YAML-based configuration
+- ODBC database connectivity
+- Metadata collection and comparison
+- Interactive decision making
+- Progress tracking
+- HTML and JSON reports
+- Dry-run mode
+- Batch processing
+- Parallel execution
 
-## 需求分析
+## Installation
 
-1. 配置文件的增强 
+```bash
+# Clone the repository
+git clone https://github.com/yourusername/db-migrate-tool.git
+cd db-migrate-tool
 
-- 连接池配置：增加连接池大小、超时设置等参数
-- 批量处理配置：批量插入的大小、事务提交频率
-- 并行处理配置：是否启用并行处理及线程数设置
-- 日志级别配置：不同级别的日志输出控制
+# Build the project
+cargo build --release
 
-2. 元数据采集的补充
-
-- 主键/唯一键信息：这对数据迁移的准确性很重要
-- 索引信息：虽然可以先不创建，但应该采集记录
-- 默认值约束：需要采集并应用到目标表
-- 非空约束：需要验证和迁移
-- 外键关系：虽然可以先不创建，但应该记录以供参考
-
-3. 数据映射的增强
-
-- 字段级映射：不仅仅是表级映射，还需要字段名映射
-- 类型转换规则：当源和目标字段类型不同时的转换规则
-- 值转换规则：某些字段值可能需要转换（如枚举值映射）
-- 条件过滤：可以指定只迁移符合某些条件的数据
-
-4. 执行流程的细化
-
-- 预检查阶段：
-- 连接测试
-- 表存在性检查
-- 权限验证
-- 模拟执行模式：只生成SQL不实际执行
-- 断点续传：记录迁移进度，支持从中断点继续
-- 数据校验：迁移后抽样校验数据一致性
-
-5. 日志和报告的增强
-- 详细执行统计：表数量、记录数、耗时等
-- 错误分类统计：按错误类型分组统计
-- 建议报告：对可能的问题给出解决建议
-- HTML报告：除了日志文件，可生成更易读的HTML报告
-
-6. 安全考虑
-- 密码加密：配置文件中的密码不应明文存储
-- 敏感数据脱敏：日志中不应记录敏感数据
-- 最小权限原则：明确所需的数据库权限
-
-7. 其他实用功能
-- 版本控制：记录迁移工具的版本和迁移任务的版本
-- 回滚方案：生成回滚脚本或方案
-- 性能监控：实时显示迁移速度和预计剩余时间
-- 通知机制：完成后发送邮件或其他通知
-
-## 技术实现建议
-
-- 使用clap或structopt处理命令行参数
-- 使用serde_yaml处理YAML配置文件
-- 使用tracing或log进行日志记录
-- 使用anyhow或thiserror进行错误处理
-- 考虑使用rayon进行并行处理
-
-## 运维提示与裁决系统设计
-
-**1. 裁决场景分类**
-
-**1.1 必须裁决项（阻塞性）**
-
-- 元数据不匹配：源表/字段在参照库中不存在
-- 数据类型不兼容：无法自动转换的类型差异
-- 数据截断风险：目标字段长度小于源数据实际长度
-- 主键/唯一键冲突：迁移可能导致数据冲突
-- 参照完整性破坏：外键依赖的数据可能不存在
-
-**1.2 建议裁决项（警告性）**
-
-- 命名规范差异：表/字段命名不符合目标库规范
-- 性能影响操作：大批量操作可能影响生产环境
-- 默认值差异：源和目标默认值不一致
-- 非空约束差异：目标约束比源更严格
-
-**1.3 信息提示项（仅记录）**
-
-- 自动处理的差异：工具已自动处理的兼容问题
-- 统计信息：迁移的表/记录数量统计
-- 性能指标：各阶段耗时统计
-
-**2. 裁决提示设计**
-
-**2.1 交互式命令行提示**
-
-```shell
-// 示例裁决提示界面
-[WARN] 表 'USER_INFO' 的字段 'PHONE' 长度不一致:
-源库: VARCHAR(20)
-参照库: VARCHAR(11)
-数据可能被截断!
-
-请选择操作:
-1. 使用参照库定义(可能截断数据)
-2. 保留源库长度(VARCHAR(20))
-3. 查看前10条数据样本
-4. 中止迁移
-
-您的选择 [1/2/3/4]:
+# The binary will be available at target/release/db-migrate-tool
 ```
 
-**2.2 裁决选项设计**
+## Configuration
 
-| 裁决类型 | 选项 | 后续行为 |
-| -- | - | -- |
-| 接受风险 |Y|记录警告并继续|
-| 跳过此项 |S|跳过当前项继续|
-| 修改配置 |M|进入配置编辑模式|
-| 中止执行 |A|安全停止迁移|
-| 查看详情 |D|显示详细信息|
-| 临时规则 |R|为此类问题创建临时规则|
-
-**3. 裁决日志格式**
-
-```json
-{
-"timestamp": "2023-07-20T14:30:45Z",
-"level": "WARNING",
-"type": "DATA_TRUNCATION",
-"table": "USER_INFO",
-"field": "PHONE",
-"source_spec": "VARCHAR(20)",
-"target_spec": "VARCHAR(11)",
-"samples": ["13800138000", "13912345678"],
-"decision": {
-   "by": "operator",
-   "choice": "KEEP_SOURCE",
-   "comment": "业务确认手机号可能有国际号码"
-  }
-}
-```
-
-**4. 预检报告设计**
-
-生成HTML格式的预检报告，包含以下部分：
-
-**4.1 摘要卡片**
-
-- 待迁移表总数
-- 发现的问题统计
-- 预估数据量
-- 预计耗时
-
-**4.2 问题清单**
-
-| 严重度 | 问题类型        | 影响对象       | 自动修复 | 需人工裁决 |
-|--------|-----------------|----------------|----------|------------|
-| 高危   | 主键缺失        | 表: ORDER_ITEMS | 否       | 是         |
-| 中危   | 类型不兼容      | 表: PRODUCTS    | 部分     | 是         |
-| 低危   | 命名规范不符    | 表: USER_LOG    | 是       | 否         |
-
-**4.3 裁决控制台**
-
-```html
-<div class="decision-panel">
-  <h3>待裁决事项</h3>
-  <div class="decision-item">
-    <p><strong>表: ORDER_ITEMS 缺少主键</strong></p>
-    <p>可能影响数据迁移完整性和查询性能</p>
-    <div class="decision-options">
-      <button data-action="accept">接受风险</button>
-      <button data-action="skip">跳过此表</button>
-      <button data-action="config">修改配置</button>
-    </div>
-  </div>
-</div>
-```
-
-**5. 裁决结果应用**
-
-**5.1 决策持久化**
-
-- 将运维人员的裁决结果保存为decisions.yaml
-- 后续执行自动应用这些决策
-- 支持决策模板复用
-
-**5.2 决策模板示例**
+Create a `config.yaml` file with the following structure:
 
 ```yaml
-# decisions.yaml
-rules:
-- match:
-  type: "DATA_TRUNCATION"
-  table: "USER_INFO"
-  field: "PHONE"
-  action: "KEEP_SOURCE"
-  comment: "业务确认需要支持国际号码"
-
-defaults:
-DATA_TRUNCATION: "WARN"
-MISSING_PRIMARY_KEY: "REQUIRE_DECISION"
-
-
 dsn:
   origin:
     driver: "DM8 ODBC DRIVER"
@@ -230,43 +54,181 @@ dsn:
     schema: "JWAB02"
     username: "JWAB02"
     password: "jhy123456"
+
+connection_pool:
+  min_size: 1
+  max_size: 10
+  timeout_seconds: 30
+
+batch:
+  batch_size: 1000
+  commit_frequency: 100
+
+parallel:
+  enabled: true
+  thread_count: 4
+
+log_level: "info"
 ```
 
-**6. 实现建议**
-   
-1. 使用inquier-rs库实现交互式命令行提示：
+## Usage
 
-```rust
-use inquire::{Select, Confirm};
+Basic usage:
 
-let options = vec!["继续", "跳过", "中止"];
-let ans = Select::new("发现不兼容类型，请选择:", options).prompt()?;
+```bash
+db-migrate-tool -c config.yaml
 ```
 
-2. 裁决上下文管理：
+With additional options:
 
-```rust
-struct Decision {
-issue_id: String,
-decision: DecisionType,
-timestamp: DateTime,
-operator: String,
-comment: Option<String>
-}
+```bash
+# Run in dry-run mode (no actual changes)
+db-migrate-tool -c config.yaml --dry-run
 
-enum DecisionType {
-AcceptRisk,
-SkipItem,
-ModifyConfig(String),
-Abort
-}
+# Set log level
+db-migrate-tool -c config.yaml --log-level debug
 
+# Specify output directory for reports
+db-migrate-tool -c config.yaml --output-dir ./reports
 ```
 
-3. 预检报告生成：
+### Command Line Options
 
-- 使用tera模板引擎生成HTML报告
-- 使用serde_json生成机器可读的裁决日志
+- `-c, --config`: Path to the configuration file (required)
+- `--dry-run`: Run in simulation mode without making changes
+- `-l, --log-level`: Set logging level (debug, info, warn, error)
+- `-o, --output-dir`: Directory for report output (default: "reports")
 
-这套设计既提供了交互式裁决能力，又保留了完整的审计日志，同时支持自动化决策模板，可以大幅提高运维效率。
+## Reports
+
+The tool generates two types of reports:
+
+1. HTML Report (`migration_report_YYYYMMDD_HHMMSS.html`)
+   - Summary of migration
+   - Error and warning details
+   - Decision records
+   - Performance metrics
+
+2. JSON Report (`migration_report_YYYYMMDD_HHMMSS.json`)
+   - Machine-readable format
+   - Complete migration details
+   - Can be used for further analysis
+
+## 中文说明
+
+### 功能特点
+
+- 基于 YAML 的配置文件
+- ODBC 数据库连接
+- 元数据收集和比较
+- 交互式决策处理
+- 进度跟踪
+- HTML 和 JSON 报告
+- 模拟运行模式
+- 批量处理
+- 并行执行
+
+### 安装方法
+
+```bash
+# 克隆仓库
+git clone https://github.com/yourusername/db-migrate-tool.git
+cd db-migrate-tool
+
+# 编译项目
+cargo build --release
+
+# 编译后的程序位于 target/release/db-migrate-tool
+```
+
+### 配置文件
+
+创建 `config.yaml` 文件，结构如下：
+
+```yaml
+dsn:
+  origin:
+    driver: "DM8 ODBC DRIVER"
+    server: "172.16.117.71:15236"
+    database: "JWAB"
+    schema: "JWAB"
+    username: "JWAB"
+    password: "jhy123456"
+  reference:
+    driver: "DM8 ODBC DRIVER"
+    server: "172.16.117.71:15236"
+    database: "JWAB01"
+    schema: "JWAB01"
+    username: "JWAB01"
+    password: "jhy123456"
+  target:
+    driver: "DM8 ODBC DRIVER"
+    server: "172.16.117.71:15236"
+    database: "JWAB02"
+    schema: "JWAB02"
+    username: "JWAB02"
+    password: "jhy123456"
+
+connection_pool:
+  min_size: 1
+  max_size: 10
+  timeout_seconds: 30
+
+batch:
+  batch_size: 1000
+  commit_frequency: 100
+
+parallel:
+  enabled: true
+  thread_count: 4
+
+log_level: "info"
+```
+
+### 使用方法
+
+基本用法：
+
+```bash
+db-migrate-tool -c config.yaml
+```
+
+高级选项：
+
+```bash
+# 模拟运行模式（不实际修改数据）
+db-migrate-tool -c config.yaml --dry-run
+
+# 设置日志级别
+db-migrate-tool -c config.yaml --log-level debug
+
+# 指定报告输出目录
+db-migrate-tool -c config.yaml --output-dir ./reports
+```
+
+### 命令行参数
+
+- `-c, --config`: 配置文件路径（必需）
+- `--dry-run`: 模拟运行模式，不实际修改数据
+- `-l, --log-level`: 设置日志级别（debug, info, warn, error）
+- `-o, --output-dir`: 报告输出目录（默认：reports）
+
+### 报告说明
+
+工具生成两种类型的报告：
+
+1. HTML 报告（`migration_report_YYYYMMDD_HHMMSS.html`）
+   - 迁移摘要
+   - 错误和警告详情
+   - 决策记录
+   - 性能指标
+
+2. JSON 报告（`migration_report_YYYYMMDD_HHMMSS.json`）
+   - 机器可读格式
+   - 完整的迁移详情
+   - 可用于进一步分析
+
+## License
+
+MIT License
 
